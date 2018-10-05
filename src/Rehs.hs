@@ -9,51 +9,57 @@ module Rehs (
    SlotTransaction,
    newTable,
    readTransaction,
-   setTransaction,
-   clearTransaction,
-   clearAttributeTransaction,
-   setSchemaTransaction,
-   reverseTransaction,
-   upcaseTransaction) where
+   setSchemaTransaction) where
 
 import Control.Concurrent.STM
-import Data.Map(Map, empty, (!), insert, fromList)
+import Data.Map(Map, empty, (!), insert, fromList, lookup)
 import Data.Char(toUpper)
 
-type Table = TVar (Map String String)
+type Table = Map String (TVar String)
 type SlotTransaction = Table -> STM (String)
 
 newTable :: STM Table
-newTable = newTVar empty
+newTable = return empty
 
-setTransaction :: String -> String -> SlotTransaction
-setTransaction attribute value = \table -> do 
-  modifyTVar table (\map -> insert attribute value map)
-  return value
+-- setTransaction :: String -> String -> SlotTransaction
+-- setTransaction attribute value = \table -> do 
+--   modifyTVar table (\map -> insert attribute value map)
+--   return value
 
-clearAttributeTransaction :: String -> SlotTransaction
-clearAttributeTransaction = flip setTransaction ""
+-- clearAttributeTransaction :: String -> SlotTransaction
+-- clearAttributeTransaction = flip setTransaction ""
 
-clearTransaction :: SlotTransaction
-clearTransaction  = \table -> do 
-  writeTVar table empty
-  return "<OK>"
+-- clearTransaction :: SlotTransaction
+-- clearTransaction  = \table -> do 
+--   writeTVar table empty
+--   return "<OK>"
+
+readSTMMaybe :: Maybe(TVar String) -> STM(String)
+readSTMMaybe (Just var) = readTVar var
+readSTMMaybe Nothing = return "<404>" 
+
+safeGet :: String -> Table -> STM(String)
+safeGet attribute table = readSTMMaybe $ Data.Map.lookup attribute table
+
 
 applyToAttribute :: (String -> String) -> String -> Table -> STM (String)
 applyToAttribute f attribute table = do 
-  map <- readTVar table
-  return $ f $ map ! attribute 
+  value <- safeGet attribute table
+  return $ f value
 
 readTransaction :: String -> SlotTransaction
 readTransaction = applyToAttribute id
 
-reverseTransaction :: String -> SlotTransaction
-reverseTransaction = applyToAttribute reverse
+-- reverseTransaction :: String -> SlotTransaction
+-- reverseTransaction = applyToAttribute reverse
 
-upcaseTransaction :: String -> SlotTransaction
-upcaseTransaction = applyToAttribute $ map toUpper
+-- upcaseTransaction :: String -> SlotTransaction
+-- upcaseTransaction = applyToAttribute $ map toUpper
 
 setSchemaTransaction :: [String] -> SlotTransaction
 setSchemaTransaction schema = \table -> do
-  writeTVar table $ fromList([(attribute, "") | attribute <- schema])
+  foldl (\tableSTM attribute -> do
+    table <- tableSTM
+    element <- newTVar ""
+    return $ insert attribute element table) (return table) schema
   return "<OK>"
