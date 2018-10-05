@@ -24,7 +24,7 @@ type Table = TVar (Map String String)
 type SlotTransaction = Table -> STM (String)
 
 newTable :: STM Table
-newTable = newTvar empty
+newTable = newTVar empty
 
 setTransaction :: String -> String -> SlotTransaction
 setTransaction attribute value = \table -> do 
